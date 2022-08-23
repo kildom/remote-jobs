@@ -5,18 +5,53 @@
 
 ```javascript
 
-/*
 
-job:
-	location: 'job'|'local'|'remote'
-	args: string[] - Array of command line arguments. First argument is a command name.
-  command: string | null - Destination tool
-  execOnJob(args?: string[]) - Execute command on this job process
-  execOnLocal(options: ExecOptions) - Execute JS script in Node.js on local controller
-  execOnRemote(options: ExecOptions) - Execute JS script in Node.js on remote server
-*/
+// QuickJS main code draft
 
-////////////////// clang.js - executed in QuickJS on this job process
+import * as os from 'os';
+import * as std from 'std';
+import * as controller from 'controller'; // native C module that connects to controller
+import * as tool from 'tool'; // module loaded before this module that contains tool description generated based on registring data
+
+function main() {
+	let r = tool.filter(scriptArgs, tool.filterOptions);
+	if (!r) {
+  	r = os.exec(...);
+    std.exit(r);
+  }
+  let job = controller.connect(std.getenv('REMOTE_JOBS_PORT') || tool.defaultPort || 3847);
+  r = job.send({cmd:'job', args:scriptArgs, scriptHash: tool.scriptHash});
+  if (r.cmd === 'getScript') {
+  	r = job.send({cmd:'script', text: std.loadFile(tool.scriptFile)});
+  }
+  while (r.cmd === 'exec') {
+    // Format of below list: command, parameters -> task to do -> response, results
+    // exec -> execute process, agrs, cwd?, env? -> execResult, exitCode
+    // getScript -> read script file -> script, text
+    // getEnv, varsNames? -> read selected or all environment variables -> env, vars
+    // print, stdout?, stderr? -> print output -> printed
+    // exit, exitCode -> exit process -> [no response]
+  	r = os.exec(...);
+    r = job.send({cmd:'execResult', exitCode: r});
+  }
+  job.disconnect();
+  std.exit(r.exitCode);
+}
+
+try {
+	main();
+} catch (ex) {
+  rj.disconnect();
+	console.log(ex);
+	std.exit(1);
+}
+
+
+////////////////// clang.js
+
+function clangFilter(args) {
+  return args.indexOf('-c') >= 0;
+}
 
 function clang() {
   if (job.args.find('-c') < 0) return job.execLocal();
@@ -33,14 +68,18 @@ function clang() {
   let ppArgs = job.args.map(arg => arg === '-c' ? '-E' : arg);
   ppArgs[0] = job.command;
   job.execLocal(ppArgs);
-  let res = job.execRemote({
-  	remote: 'clang-remote.js/clangRemote',
-    input: new job.File(output, true, false),
-    output: new job.File(output, false, true),
+  let res = job.execOnRemote({
+  	call: 'clang-remote.js/clangRemote',
+    args: {
+      input: new job.File(output, true, false),
+      output: new job.File(output, false, true),
+    },
   });
 }
 
-job.register(clang, {
+job.register({
+	filterFunction: clangFilter,
+  execFunction: clang,
   name: 'clang',
   before: 'gcc',
   commands: {
@@ -52,8 +91,9 @@ job.register(clang, {
 
 ////////////////// clang-remote.js
 
-function clangRemote(input) {
+function clangRemote(args) {
 
 }
+
 
 ```
