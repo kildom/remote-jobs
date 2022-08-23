@@ -3,7 +3,7 @@
 
 # Sample scripts
 
-```js
+```javascript
 
 /*
 
@@ -11,12 +11,12 @@ job:
 	location: 'job'|'local'|'remote'
 	args: string[] - Array of command line arguments. First argument is a command name.
   command: string | null - Destination tool
-  execOnJob(args?: string[]) - Execute command locally
-  execOnLocal(options: ExecOptions)
-  execOnRemote(options: ExecOptions)
+  execOnJob(args?: string[]) - Execute command on this job process
+  execOnLocal(options: ExecOptions) - Execute JS script in Node.js on local controller
+  execOnRemote(options: ExecOptions) - Execute JS script in Node.js on remote server
 */
 
-////////////////// clang.js
+////////////////// clang.js - executed in QuickJS on this job process
 
 function clang() {
   if (job.args.find('-c') < 0) return job.execLocal();
