@@ -13,6 +13,7 @@
 * Interesting project that may be used to communicate between controller and nodes:
   * https://www.npmjs.com/package/node-ipc
   * If undelying protocol is not complicated, maybe it can be used to communicate beween job and controller.
+* As the 3D rendering example, we can use POV-Ray and this image: http://www.ignorancia.org/index.php/galleries/old-images/the-office/
 
 # Sample scripts
 
