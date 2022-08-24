@@ -10,6 +10,9 @@
   * Records goes first to the local cache and they are send to server in the background
   * Cache server notifies all active controllers about each record addition or deletion, so the controller don't need to ask each time each server.
   * When controller goes from inactive to active state, it asks each cache server about its updates since last update in previous active state.
+* Interesting project that may be used to communicate between controller and nodes:
+  * https://www.npmjs.com/package/node-ipc
+  * If undelying protocol is not complicated, maybe it can be used to communicate beween job and controller.
 
 # Sample scripts
 
