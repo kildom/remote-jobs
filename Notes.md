@@ -1,5 +1,15 @@
 
+# Notes
 
+* Controller should contain cache.
+  * Script on controller side can check if the input is the same (for C++, hash of source file and command line is the same). If yes, use cached output.
+  * Controller provides just a cache storage. Actual putting and getting data from cache is done by the script on controller side.
+  * Cache storage is organized as `key => value`, where `value` is a JS object that can also contain File objects.
+  * If the cache size limit is reached, the oldest cache entries are removed.
+* For multiuser use case, cache should be placed on one or more cache servers
+  * Records goes first to the local cache and they are send to server in the background
+  * Cache server notifies all active controllers about each record addition or deletion, so the controller don't need to ask each time each server.
+  * When controller goes from inactive to active state, it asks each cache server about its updates since last update in previous active state.
 
 # Sample scripts
 
