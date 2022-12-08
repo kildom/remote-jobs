@@ -60,12 +60,28 @@ try {
 	std.exit(1);
 }
 
+```
 
-////////////////// clang.js
+## `clang.js`
 
-function clangFilter(args) {
-  return args.indexOf('-c') >= 0;
+```javascript
+
+function clangEntry(args) {
+	if (args.indexOf('-c') < 0)
+		return false;
+	return 'clang-controller.js:clang';
 }
+
+job.register({
+	'clang': clangEntry,
+	'clang++': clangEntry,
+});
+
+```
+
+## `clang-controller.js`
+
+```javascript
 
 function clang() {
   if (job.args.find('-c') < 0) return job.execLocal();
@@ -91,23 +107,12 @@ function clang() {
   });
 }
 
-job.register({
-	filterFunction: clangFilter,
-  execFunction: clang,
-  name: 'clang',
-  before: 'gcc',
-  commands: {
-  	'clang': 'clang',
-  	'clang++': 'clang++'
-  }
-});
+```
 
+## `clang-remote.js`
 
-////////////////// clang-remote.js
-
+```javascript
 function clangRemote(args) {
 
 }
-
-
 ```
