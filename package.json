@@ -1,0 +1,16 @@
+{
+	"private": true,
+	"devDependencies": {
+		"@types/node": "^18.11.12",
+		"run-script-os": "^1.1.6",
+		"ts-node": "^10.9.1"
+	},
+	"scripts": {
+		"build-stub-tool": "run-script-os",
+		"build-stub-tool:win32": "echo TODO: windows build",
+		"build-stub-tool:default": "gcc -O3 -flto -o stub-tool/stub-tool stub-tool/main-unix.c ; strip stub-tool/stub-tool",
+		"build-stub-tool-debug": "run-script-os",
+		"build-stub-tool-debug:win32": "echo TODO: windows build",
+		"build-stub-tool-debug:default": "gcc -O0 -g -o stub-tool/stub-tool stub-tool/main-unix.c"
+	}
+}
