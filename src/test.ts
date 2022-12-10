@@ -4,11 +4,30 @@ import * as net from 'net';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TextDecoder, TextEncoder } from 'util';
+import { Mutex } from 'async-mutex';
 
+const mutexMember = Symbol();
+
+function synchronized(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+	let func = descriptor.value;
+	descriptor.value = async function (...args: any[]) {
+		let mutex: Mutex = this[mutexMember];
+		if (!mutex) {
+			mutex = new Mutex();
+			this[mutexMember] = mutex;
+		}
+		let release = await mutex.acquire();
+		try {
+			return await func.apply(this, args);
+		} finally {
+			release();
+		}
+	}
+}
 
 const CONNECTION_PREFIX =
 	process.platform == 'win32' ? '\\\\?\\pipe\\RemJobs75oKmnN7rWX'
-	: '/tmp/RemJobs75oKmnN7rWX';
+		: '/tmp/RemJobs75oKmnN7rWX';
 
 function serverError(error: any) {
 	console.error('Server error: ', error);
@@ -17,46 +36,86 @@ function serverError(error: any) {
 function serverListening() {
 	console.log('Server listening');
 }
-
-class SocketCloseError extends Error { }
-class SocketTimeoutError extends Error { }
-
 const STUB_RECV_TIMEOUT = 10000;
 
-class SocketPromiseWrapper {
+const MAX_ENVIRONMENT_CACHE_SIZE = 5 * 1024 * 1024;
+
+let environmentCache: { [hash: string]: [number, string[]] } = {};
+let environmentCacheSize = 0;
+
+function getCachedEnvironment(hash: string): string[] | null {
+	if (hash in environmentCache) {
+		let env = environmentCache[hash];
+		delete environmentCache[hash];
+		environmentCache[hash] = env;
+		return env[1];
+	} else {
+		return null;
+	}
+}
+
+function addCachedEnvironment(hash: string, value: string[]) {
+	let size = 2 * value.reduce((sum, x) => sum + x.length, 0) + 64 * value.length;
+	while (environmentCacheSize > 0 && environmentCacheSize + size > MAX_ENVIRONMENT_CACHE_SIZE) {
+		let oldestHash: string | null = null;
+		for (let h in environmentCache) {
+			oldestHash = h;
+			break;
+		}
+		if (oldestHash !== null) {
+			environmentCacheSize -= environmentCache[oldestHash][0];
+			delete environmentCache[oldestHash];
+		}
+	}
+	environmentCache[hash] = [size, value];
+	environmentCacheSize += size;
+}
+
+
+class StubTool {
+
+	/*
+	States:
+		ACTIVE: socket != null && error == null
+		ERROR: socket == null && error != null
+		CLOSED: socket == null && error == null
+		[invalid]: socket != null && error != null
+	*/
 
 	private signalListeners: [any, any][] = [];
 	private timeout: any = null;
 	private buffers: Buffer[] = [];
-	private firstBufferUsed: number = 0;
 	private error: Error | null = null;
+	private firstBufferUsed: number = 0;
 	private socket: net.Socket | null = null;
-	private closeResolve: any = null;
-	private closeReject: any = null;
 	private viewArray: Uint8Array = new Uint8Array(16);
 	private view: DataView;
 	private dec: TextDecoder = new TextDecoder();
 	private enc: TextEncoder = new TextEncoder();
+	private toolArgs: string[] = [];
+	private toolCwd: string = '';
+	private toolEnv: string[] = [];
 
 	public constructor(socket: net.Socket) {
 		this.view = new DataView(this.viewArray.buffer, this.viewArray.byteOffset);
 		this.socket = socket
-			.on('close', (hadError) => {
-				if (hadError) {
-					this.closeReject(new SocketCloseError())
-				} else {
-					this.closeResolve();
+			.on('close', hadError => {
+				if (this.socket !== null) {
+					let s = this.socket;
+					this.socket = null;
+					s.destroy();
 				}
+				if (hadError && this.error === null) {
+					this.error = new Error('Socket close error.');
+				}
+				this.signal();
 			})
-			.on('data', (data) => {
-				//console.log('Data', data.length);
+			.on('data', data => {
 				this.buffers.push(data.subarray());
 				this.signal();
 			})
-			.on('end', () => console.log('end'))
-			.on('error', () => (err: Error) => {
-				this.error = err;
-				this.signal();
+			.on('error', err => {
+				this.setError(err);
 			});
 		this.socket.resume();
 	}
@@ -68,7 +127,7 @@ class SocketPromiseWrapper {
 				this.timeout = setTimeout(() => {
 					this.timeout = null;
 					while (this.signalListeners.length > 0) {
-						(this.signalListeners.pop() as any)[1](new SocketTimeoutError());
+						(this.signalListeners.pop() as any)[1](new Error('Socket timeout error.'));
 					}
 				}, STUB_RECV_TIMEOUT);
 			}
@@ -85,22 +144,36 @@ class SocketPromiseWrapper {
 		}
 	}
 
-	public close() {
-		if (this.socket === null) return;
-		return new Promise<void>((resolve, reject) => {
-			this.closeResolve = resolve;
-			this.closeReject = reject;
-			this.socket!.destroy();
-			this.socket = null;
-		});
+	private setError(err: Error) {
+		if (this.error === null) {
+			this.error = err;
+			if (this.socket !== null) {
+				let s = this.socket;
+				this.socket = null;
+				s.destroy();
+			}
+			this.signal();
+		}
+		return err;
 	}
 
-	public send(data: string | Uint8Array | Buffer) {
-		if (this.socket === null) throw Error('Not connected');
+	private async close() {
+		if (this.socket !== null) {
+			this.socket.destroy();
+			while (this.socket !== null) {
+				await this.waitForSignal();
+			}
+		}
+	}
+
+	private send(data: string | Uint8Array | Buffer) {
+		if (this.socket === null) {
+			throw Error('Sending data to disconnected socket.');
+		}
 		return new Promise<void>((resolve, reject) => {
 			this.socket!.write(data, err => {
 				if (err) {
-					reject(err);
+					reject(this.setError(err));
 				} else {
 					resolve();
 				}
@@ -108,26 +181,19 @@ class SocketPromiseWrapper {
 		});
 	}
 
-	public async sendUint32(value: number) {
+	private async sendUint32(value: number) {
 		this.view.setUint32(0, value, true);
 		await this.send(this.viewArray.subarray(0, 4));
 	}
 
-	public async sendString(value: string) {
-		let buf = this.enc.encode(value);
-		await this.sendUint32(buf.byteLength);
-		await this.send(buf);
-	}
-
 	private async recvPartial(output: Uint8Array, length: number, offset: number) {
-		//console.log('recvPartial', length, offset);
-		while (this.buffers.length == 0 && this.error === null) {
+		while (this.buffers.length == 0) {
+			if (this.error !== null) {
+				throw this.error;
+			} else if (this.socket === null) {
+				throw new Error('Socket disconnected.');
+			}
 			await this.waitForSignal();
-		}
-		if (this.error) {
-			let error = this.error;
-			this.error = null;
-			throw error;
 		}
 		let buffer = this.buffers[0];
 		let srcOffset = this.firstBufferUsed;
@@ -140,73 +206,115 @@ class SocketPromiseWrapper {
 			this.buffers.shift();
 		}
 		output.set(new Uint8Array(buffer.buffer, buffer.byteOffset + srcOffset, copyBytes), offset);
-		//console.log('recvPartial', copyBytes);
 		return copyBytes;
 	}
 
-	public async recv(output: Uint8Array, length: number, offset: number = 0) {
-		//console.log('recv', length, offset);
+	private async recv(output: Uint8Array, length: number, offset: number = 0) {
 		while (length > 0) {
 			let done = await this.recvPartial(output, length, offset);
 			length -= done;
 			offset += done;
 		}
-		//console.log('recv exit');
 	}
 
-	public async recvUint32() {
+	private async recvUint32() {
 		await this.recv(this.viewArray, 4);
 		return this.view.getUint32(0, true);
 	}
 
-	public async recvString() {
+	private async recvString() {
 		let length = await this.recvUint32();
 		let buf = new Uint8Array(length);
 		await this.recv(buf, length);
 		return this.dec.decode(buf);
 	}
+
+	@synchronized
+	public async init() {
+		try {
+			let magic = await this.recvUint32();
+			if (magic != 0x7F4A9400) throw Error('Unsupported stub-tool version.');
+			let argc = await this.recvUint32();
+			this.toolArgs = new Array(argc);
+			for (let i = 0; i < argc; i++) {
+				this.toolArgs[i] = await this.recvString();
+			}
+			this.toolCwd = await this.recvString();
+			let length = await this.recvUint32();
+			let hashBinary = new Uint8Array(length);
+			await this.recv(hashBinary, length);
+			let hash = Buffer.from(hashBinary).toString('hex');
+			let cachedEnv = getCachedEnvironment(hash);
+			if (cachedEnv === null) {
+				await this.sendUint32(3);
+				let envCount = await this.recvUint32();
+				this.toolEnv = new Array(envCount);
+				for (let i = 0; i < envCount; i++) {
+					this.toolEnv[i] = await this.recvString();
+				}
+				addCachedEnvironment(hash, this.toolEnv);
+			} else {
+				this.toolEnv = cachedEnv;
+			}
+		} catch (err) {
+			throw this.setError(err);
+		}
+	}
+
+	@synchronized
+	public async print(value: Uint8Array, stderr: boolean) {
+		try {
+			await this.sendUint32(stderr ? 2 : 1);
+			await this.sendUint32(value.length);
+			await this.send(value);
+		} catch (err) {
+			throw this.setError(err);
+		}
+	}
+
+	@synchronized
+	public async exit(status: number) {
+		try {
+			await this.sendUint32(0);
+			await this.sendUint32(status);
+			await this.close();
+		} catch (err) {
+			throw this.setError(err);
+		}
+	}
+
+	public get env() {
+		return this.toolEnv;
+	}
+
+	public get cwd() {
+		return this.toolCwd;
+	}
+
+	public get args() {
+		return this.toolArgs;
+	}
 }
 
-async function handleClient(w: SocketPromiseWrapper) {
-	try {
-		let magic = await w.recvUint32();
-		if (magic != 0x7F4A9400) throw Error('Unsupported stub version.');
-		let argc = await w.recvUint32();
-		let argv = new Array(argc);
-		for (let i = 0; i < argc; i++) {
-			argv[i] = await w.recvString();
-			console.log('arg', i, argv[i]);
-		}
-		let cwd = await w.recvString();
-		console.log('cwd', cwd);
-		let length = await w.recvUint32();
-		let hash = new Uint8Array(length);
-		await w.recv(hash, length);
-		console.log('hash', Buffer.from(hash).toString('hex'));
-		await w.sendUint32(1);
-		await w.sendString("This is the stdout.\n");
-		await w.sendUint32(2);
-		await w.sendString("This is the stderr.\n");
-		//await new Promise(r => setTimeout(r, 1000));
-		await w.sendUint32(3);
-		let envc = await w.recvUint32();
-		let envv = new Array(envc);
-		console.log('envc', envc);
-		for (let i = 0; i < envc; i++) {
-			envv[i] = await w.recvString();
-			console.log('envv', i, envv[i]);
-		}
-		await w.sendUint32(0);
-		await w.sendUint32(33);
-	} finally {
-		await w.close();
+async function handleClient(socket: net.Socket) {
+	let tool = new StubTool(socket);
+	await tool.init();
+	for (let arg of tool.args) {
+		console.log('arg', arg);
 	}
+	console.log('cwd', tool.cwd);
+	for (let env of tool.env) {
+		console.log('env', env);
+	}
+	let enc = new TextEncoder();
+	await tool.print(enc.encode("This is stdout.\n"), false);
+	await tool.print(enc.encode("This is stderr.\n"), true);
+	await tool.exit(13);
 }
 
 function serverConnection(socket: net.Socket) {
 	console.log('Server connected');
-	let w = new SocketPromiseWrapper(socket);
-	handleClient(w);
+	handleClient(socket);
 }
 
 function serverClosed() {
@@ -214,6 +322,9 @@ function serverClosed() {
 }
 
 async function main() {
+	try {
+		fs.mkdirSync(CONNECTION_PREFIX, { recursive: true });
+	} catch { }
 	let server = net.createServer()
 		.on('error', serverError)
 		.on('listening', serverListening)

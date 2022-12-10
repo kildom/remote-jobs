@@ -69,12 +69,12 @@ static void connect_to_controller()
 		id = "0";
 	}
 
-	snprintf(server_path, sizeof(server_path), "%s/%sS", CONNECTION_PREFIX, id);
-	rc = snprintf(client_path, sizeof(client_path), "%s/%sC%d", CONNECTION_PREFIX, id, (int)getpid());
+	snprintf(server_path, sizeof(server_path), "%s/%sS", UNIX_CONNECTION_PREFIX, id);
+	rc = snprintf(client_path, sizeof(client_path), "%s/%sC%d", UNIX_CONNECTION_PREFIX, id, (int)getpid());
 	assert_with_message(rc > 0 && rc < MEMBER_SIZE(struct sockaddr_un, sun_path),
 			    "Connection id too long.\n");
 
-	mkdir(CONNECTION_PREFIX, 0777);
+	mkdir(UNIX_CONNECTION_PREFIX, 0777);
 
 	client_sock = socket(AF_UNIX, SOCK_STREAM, 0);
 	assert_with_message(client_sock >= 0, "Cannot create UNIX socket.\n");
