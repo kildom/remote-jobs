@@ -14,7 +14,7 @@
 #include "md5.h"
 
 
-#define UNIX_CONNECTION_PREFIX "/tmp/" CONNECTION_PREFIX
+#define UNIX_CONNECTION_PREFIX "/tmp/" CONNECTION_PREFIX "/"
 
 extern char **environ;
 
@@ -69,8 +69,8 @@ static void connect_to_controller()
 		id = "0";
 	}
 
-	snprintf(server_path, sizeof(server_path), "%s/%sS", UNIX_CONNECTION_PREFIX, id);
-	rc = snprintf(client_path, sizeof(client_path), "%s/%sC%d", UNIX_CONNECTION_PREFIX, id, (int)getpid());
+	snprintf(server_path, sizeof(server_path), "%s%sS", UNIX_CONNECTION_PREFIX, id);
+	rc = snprintf(client_path, sizeof(client_path), "%s%sC%d", UNIX_CONNECTION_PREFIX, id, (int)getpid());
 	assert_with_message(rc > 0 && rc < MEMBER_SIZE(struct sockaddr_un, sun_path),
 			    "Connection id too long.\n");
 

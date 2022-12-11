@@ -25,9 +25,7 @@ function synchronized(target: any, propertyKey: string, descriptor: PropertyDesc
 	}
 }
 
-const CONNECTION_PREFIX =
-	process.platform == 'win32' ? '\\\\?\\pipe\\RemJobs75oKmnN7rWX'
-		: '/tmp/RemJobs75oKmnN7rWX';
+const CONNECTION_PREFIX = 'RemJobs75oKmnN7rWX';
 
 function serverError(error: any) {
 	console.error('Server error: ', error);
@@ -322,18 +320,25 @@ function serverClosed() {
 }
 
 async function main() {
-	try {
-		fs.mkdirSync(CONNECTION_PREFIX, { recursive: true });
-	} catch { }
+	let connection_path: string;
+	if (process.platform === 'win32') {
+		connection_path = `\\\\.\\pipe\\${CONNECTION_PREFIX}.0`;
+	} else {
+		connection_path = `/tmp/${CONNECTION_PREFIX}/0S`;
+		try {
+			fs.mkdirSync(`/tmp/${CONNECTION_PREFIX}`, { recursive: true });
+		} catch { }
+		try {
+			fs.unlinkSync(connection_path);
+		} catch { }
+	}
 	let server = net.createServer()
 		.on('error', serverError)
 		.on('listening', serverListening)
 		.on('connection', serverConnection)
 		.on('close', serverClosed);
-	try {
-		fs.unlinkSync(`${CONNECTION_PREFIX}${path.sep}0S`);
-	} catch { }
-	server.listen(`${CONNECTION_PREFIX}${path.sep}0S`);
+	console.log(`listen: ${connection_path}0S`);
+	server.listen(connection_path);
 	setTimeout(() => server.close(), 20000);
 }
 
