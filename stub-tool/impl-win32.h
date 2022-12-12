@@ -1,15 +1,14 @@
+#ifndef _IMPL_WIN32_H_
+#define _IMPL_WIN32_H_
 
-#include <stdint.h>
 #include <malloc.h>
 #include <stdio.h>
-#include <stdbool.h>
 #include <windows.h>
-#include <winbase.h>
 #include <wchar.h>
-#include <io.h>
 #include <fcntl.h>
+#include <io.h>
 
-#include "common.h"
+#include "main.h"
 
 #define _WIN32_CONNECTION_PREFIX2(x) L"\\\\.\\pipe\\" L##x L"."
 #define _WIN32_CONNECTION_PREFIX1(x) _WIN32_CONNECTION_PREFIX2(x)
@@ -26,7 +25,6 @@ static void fatal(const char *message)
 	fprintf(stderr, "%s\r\n", message);
 	exit(99);
 }
-
 
 static void connect_to_controller()
 {
@@ -103,7 +101,7 @@ static void get_process_info(int argc, char *argv[])
 	// Get current directory
 	DWORD n = GetCurrentDirectoryW(0, NULL);
 	test(n > 0, "GetCurrentDirectory failed.");
-	ichar *cwd = (ichar*)malloc(n);
+	ichar *cwd = (ichar *)malloc(n);
 	test(cwd != NULL, "Memory allocation failed.");
 	n = GetCurrentDirectoryW(n, cwd);
 	test(n > 0, "GetCurrentDirectory failed.\n");
@@ -117,7 +115,7 @@ static void get_process_info(int argc, char *argv[])
 		ienv_count++;
 		ptr += wcslen(ptr) + 1;
 	}
-	ienv = (const ichar**)malloc(ienv_count * sizeof(ichar*));
+	ienv = (const ichar **)malloc(ienv_count * sizeof(ichar *));
 	test(ienv != NULL, "Memory allocation failed.");
 	ptr = GetEnvironmentStringsW();
 	int i;
@@ -128,15 +126,13 @@ static void get_process_info(int argc, char *argv[])
 	}
 }
 
-static size_t write_output(int fd, const uint8_t* data, size_t size)
+static size_t write_output(int fd, const uint8_t *data, size_t size)
 {
-	FILE* dest = fd == 1 ? stdout : stderr;
+	FILE *dest = fd == 1 ? stdout : stderr;
 	int n = fwrite(data, 1, size, dest);
 	test(n > 0, "Write to stdout or stderr failed.");
 	return n;
 }
-
-
 
 /*void ErrorExit(LPTSTR lpszFunction)
 {
@@ -169,3 +165,5 @@ static size_t write_output(int fd, const uint8_t* data, size_t size)
 	LocalFree(lpDisplayBuf);
 	ExitProcess(dw);
 }*/
+
+#endif
