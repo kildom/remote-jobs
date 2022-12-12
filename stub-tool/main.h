@@ -1,3 +1,12 @@
+/*!
+ * Copyright (c) 2022, Dominik Kilian <kontakt@dominik.cc>
+ * All rights reserved.
+ * 
+ * This software is distributed under the BSD 3-Clause License. See the
+ * LICENSE.txt file for details.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef _MAIN_H_
 #define _MAIN_H_
 

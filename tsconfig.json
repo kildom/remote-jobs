@@ -1,8 +1,8 @@
 {
-	"compilerOptions": {
-		"target": "ES2015",
-		"emitDecoratorMetadata": true,
-		"experimentalDecorators": true,
-		"moduleResolution": "node"
-	}
+    "compilerOptions": {
+        "target": "ES2015",
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "moduleResolution": "node"
+    }
 }

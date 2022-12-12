@@ -1,3 +1,12 @@
+/*!
+ * Copyright (c) 2022, Dominik Kilian <kontakt@dominik.cc>
+ * All rights reserved.
+ * 
+ * This software is distributed under the BSD 3-Clause License. See the
+ * LICENSE.txt file for details.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #include "impl-unix.h"
 #include "impl-win32.h"
 #include "md5.h"
@@ -46,7 +55,7 @@ static uint32_t recv_int()
 
 static int ienv_compare(const void *a, const void *b)
 {
-	return istrcmp(a, b);
+    return istrcmp(a, b);
 }
 
 static void calc_env_hash()
