@@ -1,5 +1,6 @@
 #ifndef _IMPL_WIN32_H_
 #define _IMPL_WIN32_H_
+#ifdef WIN32
 
 #include <malloc.h>
 #include <stdio.h>
@@ -95,7 +96,7 @@ static void get_process_info(int argc, char *argv[])
 	// Set stdout to binary mode to avoid any tranformations
 	_setmode(_fileno(stdout), _O_BINARY);
 
-	// Get process arguments
+	// Get process arguments (ignore argv from main, because it contains ANSI string)
 	iarg = (const ichar **)CommandLineToArgvW(GetCommandLineW(), &iarg_count);
 
 	// Get current directory
@@ -104,7 +105,7 @@ static void get_process_info(int argc, char *argv[])
 	ichar *cwd = (ichar *)malloc(n);
 	test(cwd != NULL, "Memory allocation failed.");
 	n = GetCurrentDirectoryW(n, cwd);
-	test(n > 0, "GetCurrentDirectory failed.\n");
+	test(n > 0, "GetCurrentDirectory failed.");
 	icwd = cwd;
 
 	// Get environment variables
@@ -134,36 +135,5 @@ static size_t write_output(int fd, const uint8_t *data, size_t size)
 	return n;
 }
 
-/*void ErrorExit(LPTSTR lpszFunction)
-{
-	// Retrieve the system error message for the last-error code
-
-	LPVOID lpMsgBuf;
-	LPVOID lpDisplayBuf;
-	DWORD dw = GetLastError();
-
-	FormatMessage(
-		FORMAT_MESSAGE_ALLOCATE_BUFFER |
-			FORMAT_MESSAGE_FROM_SYSTEM |
-			FORMAT_MESSAGE_IGNORE_INSERTS,
-		NULL,
-		dw,
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(LPTSTR)&lpMsgBuf,
-		0, NULL);
-
-	// Display the error message and exit the process
-
-	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT,
-									  (lstrlen((LPCTSTR)lpMsgBuf) + lstrlen((LPCTSTR)lpszFunction) + 40) * sizeof(TCHAR));
-	wsprintf((LPTSTR)lpDisplayBuf,
-			 TEXT("%s failed with error %d: %s"),
-			 lpszFunction, dw, lpMsgBuf);
-	MessageBox(NULL, (LPCTSTR)lpDisplayBuf, TEXT("Error"), MB_OK);
-
-	LocalFree(lpMsgBuf);
-	LocalFree(lpDisplayBuf);
-	ExitProcess(dw);
-}*/
-
+#endif
 #endif

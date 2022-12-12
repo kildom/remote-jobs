@@ -1,11 +1,6 @@
-#ifdef WIN32
-#include "impl-win32.h"
-#else
 #include "impl-unix.h"
-#endif
+#include "impl-win32.h"
 #include "md5.h"
-
-static uint8_t buffer[65536];
 
 static void test(bool cond, const char *message)
 {

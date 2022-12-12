@@ -25,6 +25,9 @@ typedef char ichar;
 #define MEMBER_SIZE(type, member) sizeof(((type *)0)->member)
 #endif
 
+// Temporary buffer
+static uint8_t buffer[65536];
+
 // Process information
 static const ichar *icwd;
 static int iarg_count;
